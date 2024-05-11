@@ -1,0 +1,12 @@
+{
+  "name": "arc",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "arc.js",
+  "scripts": {
+    "test": "node arc.test.mjs"
+  },
+  "author": "",
+  "license": "ISC"
+}

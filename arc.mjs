@@ -22,28 +22,57 @@
   @returns {Object} - Returns a success object if the validation is successful, otherwise returns an error object.
 
 */
+import { permitValidations } from "./utils/uitlsfunc.mjs";
+// Global config object which keep track of arc instance settings
+const arcConfig = {
+  adValidation: false,
+  size: 1000,
+};
 
 function rtnError(msg) {
   return { success: false, msg };
 }
 
 function rtnSuccess() {
-  return { success: true, msg: "Response is as expected." };
+  return { success: true, msg: "Structure is as expected." };
 }
 
 /*
-      Permit types are set of data types which are allowed in arc.
-  */
+    Permit types are set of data types which are allowed in arc.
+*/
 
 const permitChilds = {
-  obj: "object",
-  arr: "array",
-  int: "number",
-  bool: "boolean",
-  str: "string",
+  obj: { nativeType: "object", allowed: { valueCheck: false } },
+  arr: {
+    nativeType: "array",
+    allowed: {
+      valueCheck: true,
+    },
+  },
+  int: {
+    nativeType: "number",
+    allowed: {
+      valueCheck: true,
+    },
+  },
+  bool: {
+    nativeType: "boolean",
+    allowed: {
+      valueCheck: true,
+    },
+  },
+  str: {
+    nativeType: "string",
+    allowed: {
+      valueCheck: true,
+    },
+  },
 };
 
 function checkTypes(type, node) {
+  // Ex
+  // type : "string"
+  // node : "Rahul"
   if (!permitChilds[type]) {
     return {
       success: false,
@@ -51,12 +80,17 @@ function checkTypes(type, node) {
     };
   }
 
-  if (permitChilds[type] == "array" && Array.isArray(node)) {
+  if (permitChilds[type]["nativeType"] == "array" && Array.isArray(node)) {
     return { success: true, msg: "Type validated!" };
   }
 
-  if (permitChilds[type] == typeof node) {
-    return { success: true, msg: "Type validated!" };
+  if (permitChilds[type]["nativeType"] == typeof node) {
+    // Type is validated.
+    return {
+      success: true,
+      msg: "Type validated!",
+      isValidationAllowed: permitChilds[type]["allowed"]["valueCheck"],
+    };
   }
 
   // Default false rtn for invalid type.
@@ -64,6 +98,23 @@ function checkTypes(type, node) {
     success: false,
     msg: `Type not matched. Expected ${type} but got ${typeof node}.`,
   };
+}
+
+function checkValue(node, vldArr) {
+  console.log(node, vldArr);
+  for (let i = 0; i < vldArr.length; i++) {
+    if (permitValidations[vldArr[i]["name"]]) {
+      const validationFunction = permitValidations[vldArr[i]["name"]];
+      if (
+        !validationFunction ||
+        typeof validationFunction["callback"] !== "function"
+      ) {
+        continue;
+      }
+      return validationFunction["callback"](node, vldArr[i]["data"]);
+    }
+  }
+  return { success: true };
 }
 
 function objNestingTest(root) {
@@ -86,7 +137,7 @@ function validateChilds(childArr, currObj) {
 }
 
 function validateIndividualNode(nodeObj, currObj) {
-  let { type, name, childs } = nodeObj;
+  let { type, name, childs, validations } = nodeObj;
   if (!type || !name) {
     return rtnError("Type and name properties are required in the root node.");
   }
@@ -98,6 +149,30 @@ function validateIndividualNode(nodeObj, currObj) {
   let typeStatus = checkTypes(type, currObj[name]);
   if (!typeStatus.success) {
     return rtnError(typeStatus.msg);
+  }
+
+  /*
+    Since type is validated we can process for validation step
+    We have already get signal for validation allowed or not from above
+    checkTypes call. (property name : isValidationAllowed)
+  */
+  console.log(typeStatus["isValidationAllowed"]);
+  if (typeStatus["isValidationAllowed"]) {
+    if (validations) {
+      if (Array.isArray(validations)) {
+        if (validations.length > 0) {
+          let vldStatus = checkValue(currObj[name], validations);
+          console.log(vldStatus);
+          if (!vldStatus.success) {
+            return rtnError(vldStatus.msg);
+          }
+        }
+      } else {
+        return rtnError(
+          `Validations for ${name} should be an array of objects.`
+        );
+      }
+    }
   }
 
   if (childs) {
@@ -117,9 +192,12 @@ function validateIndividualNode(nodeObj, currObj) {
 
 function validateCommand(scrut) {
   let { root, data } = scrut;
-  console.log(root, data);
   if (!root || !data) {
     return rtnError("Invalid structure. root and data object is required.");
+  }
+
+  if (typeof root != "object" || typeof data != "object") {
+    return rtnError("Invalid structure. root and data must be object.");
   }
 
   // Check is multiple properties are exist in root level.
@@ -127,13 +205,14 @@ function validateCommand(scrut) {
   if (isMltrt) {
     let modRoot = { name: "data", type: "obj", childs: root.childs };
     let modData = { data: data };
-    console.log(modData, modRoot);
     return validateIndividualNode(modRoot, modData);
   }
   return validateIndividualNode(root, data);
 }
 
-function arc() {
+function arc(config) {
+  // arcConfig = { ...arcConfig, ...config };
+  // console.log(arcConfig);
   // Encapsulation of private functions and properties , to outside world.
   // Will only return function which are allowed to access for outside modules.
   return {
@@ -142,52 +221,4 @@ function arc() {
   };
 }
 
-let received = {
-  mark: {
-    coll: {
-      id: 1,
-      name: "John Doe",
-      age: 30,
-      address: {
-        street: "123 Main St",
-        city: "Anytown",
-        state: "CA",
-        postalCode: "12345",
-      },
-    },
-  },
-  //   contacts: [
-  //     { type: "email", value: "john@example.com" },
-  //     { type: "phone", value: "555-123-4567" },
-  //   ],
-};
-let test = arc();
-
-let expected = {
-  type: "obj",
-  name: "mark",
-  childs: [
-    {
-      type: "obj",
-      name: "coll",
-      childs: [
-        { type: "int", name: "id" },
-        { type: "str", name: "name" },
-        { type: "int", name: "age" },
-        {
-          type: "obj",
-          name: "address",
-          childs: [
-            { type: "str", name: "street" },
-            { type: "str", name: "city" },
-            { type: "str", name: "state" },
-          ],
-        },
-      ],
-    },
-  ],
-};
-
-console.log(test.arcInit({ root: expected, data: received }));
-
-// export { validateCommand };
+export { arc };
