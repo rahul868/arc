@@ -34,7 +34,7 @@ function rtnError(msg) {
 }
 
 function rtnSuccess() {
-  return { success: true, msg: "Structure is as expected." };
+  return { success: true, msg: "Structure is as expected. All tests passed." };
 }
 
 /*
@@ -42,29 +42,37 @@ function rtnSuccess() {
 */
 
 const permitChilds = {
-  obj: { nativeType: "object", allowed: { valueCheck: false } },
+  obj: { nativeType: "object", allowedProps: { childs: true } },
   arr: {
     nativeType: "array",
-    allowed: {
-      valueCheck: true,
+    validations: {
+      gtthan: permitValidations["gtthan"],
+      ltthan: permitValidations["ltthan"],
+      equalto: permitValidations["equalto"],
     },
+    allowedProps: { childs: false },
   },
   int: {
     nativeType: "number",
-    allowed: {
-      valueCheck: true,
+    validations: {
+      gtthan: permitValidations["gtthan"],
+      shouldbe: permitValidations["shouldbe"],
+      ltthan: permitValidations["ltthan"],
+      equalto: permitValidations["equalto"],
     },
+    allowedProps: { childs: false },
   },
   bool: {
     nativeType: "boolean",
-    allowed: {
-      valueCheck: true,
+    validations: {
+      shouldbe: permitValidations["shouldbe"],
     },
+    allowedProps: {},
   },
   str: {
     nativeType: "string",
-    allowed: {
-      valueCheck: true,
+    validations: {
+      shouldbe: permitValidations["shouldbe"],
     },
   },
 };
@@ -81,7 +89,11 @@ function checkTypes(type, node) {
   }
 
   if (permitChilds[type]["nativeType"] == "array" && Array.isArray(node)) {
-    return { success: true, msg: "Type validated!" };
+    return {
+      success: true,
+      msg: "Type validated!",
+      typeAllowedProps: permitChilds[type]["allowedProps"],
+    };
   }
 
   if (permitChilds[type]["nativeType"] == typeof node) {
@@ -89,7 +101,7 @@ function checkTypes(type, node) {
     return {
       success: true,
       msg: "Type validated!",
-      isValidationAllowed: permitChilds[type]["allowed"]["valueCheck"],
+      typeAllowedProps: permitChilds[type]["allowedProps"],
     };
   }
 
@@ -100,18 +112,34 @@ function checkTypes(type, node) {
   };
 }
 
-function checkValue(node, vldArr) {
-  console.log(node, vldArr);
+function initValidation(type, node, vldArr) {
+  /*
+    node : Actual node or data which we have received from Third-party resource. (API)
+    vldArr : It is an array of validations which user want to perform on 
+    respective node of schema.
+    [{name:"name of validation",data:[]}]
+
+  */
+  let currType = permitChilds[type];
+
+  // Check for is respective type have allowed validations.
+  if (!currType["validations"] || typeof currType["validations"] !== "object") {
+    return rtnError(`No validations allowed for ${type}`);
+  }
+
   for (let i = 0; i < vldArr.length; i++) {
-    if (permitValidations[vldArr[i]["name"]]) {
-      const validationFunction = permitValidations[vldArr[i]["name"]];
-      if (
-        !validationFunction ||
-        typeof validationFunction["callback"] !== "function"
-      ) {
-        continue;
-      }
-      return validationFunction["callback"](node, vldArr[i]["data"]);
+    const validationFunction = currType["validations"][vldArr[i]["name"]];
+    if (
+      !validationFunction ||
+      typeof validationFunction["callback"] !== "function"
+    ) {
+      return rtnError(
+        `${vldArr[i]["name"]} validation filter not allowed for ${type}`
+      );
+    }
+    let vldStatus = validationFunction["callback"](node, vldArr[i]["data"]);
+    if (!vldStatus.success) {
+      return rtnError(vldStatus.msg);
     }
   }
   return { success: true };
@@ -137,7 +165,9 @@ function validateChilds(childArr, currObj) {
 }
 
 function validateIndividualNode(nodeObj, currObj) {
-  let { type, name, childs, validations } = nodeObj;
+  const startTime = performance.now();
+
+  let { type, name, childs, arrSchema, validations } = nodeObj;
   if (!type || !name) {
     return rtnError("Type and name properties are required in the root node.");
   }
@@ -156,26 +186,29 @@ function validateIndividualNode(nodeObj, currObj) {
     We have already get signal for validation allowed or not from above
     checkTypes call. (property name : isValidationAllowed)
   */
-  console.log(typeStatus["isValidationAllowed"]);
-  if (typeStatus["isValidationAllowed"]) {
-    if (validations) {
-      if (Array.isArray(validations)) {
-        if (validations.length > 0) {
-          let vldStatus = checkValue(currObj[name], validations);
-          console.log(vldStatus);
-          if (!vldStatus.success) {
-            return rtnError(vldStatus.msg);
-          }
+  if (validations) {
+    if (Array.isArray(validations)) {
+      if (validations.length > 0) {
+        let vldStatus = initValidation(type, currObj[name], validations);
+        if (!vldStatus.success) {
+          return rtnError(vldStatus.msg);
         }
-      } else {
-        return rtnError(
-          `Validations for ${name} should be an array of objects.`
-        );
       }
+    } else {
+      return rtnError(`Validations for ${name} should be an array of objects.`);
     }
   }
 
   if (childs) {
+    // Check for validating is childs allowed for this respective TYPE
+    if (
+      !typeStatus["typeAllowedProps"] ||
+      !typeStatus["typeAllowedProps"]["childs"]
+    ) {
+      return rtnError(`Childs props is not permited for ${type} type.`);
+    }
+
+    // Executed when child exist and also respective type has permission to accept childs prop.
     if (Array.isArray(childs)) {
       if (childs.length > 0) {
         return validateChilds(childs, currObj[name]);
@@ -186,6 +219,18 @@ function validateIndividualNode(nodeObj, currObj) {
       );
     }
   }
+
+  // if (arr_childs) {
+  //   if (Array.isArray(childs)) {
+  //     if (childs.length > 0) {
+  //       return validateArrSchema(childs, currObj[name]);
+  //     }
+  //   } else {
+  //     return rtnError(
+  //       `Property ${name} has invalid child type. Childs should be an array of objects.`
+  //     );
+  //   }
+  // }
 
   return rtnSuccess();
 }

@@ -1,0 +1,2 @@
+str -> {valueCheck:callback};
+arr -> {gt:callback,ls:callback}
