@@ -49,6 +49,7 @@ const permitChilds = {
       gtthan: permitValidations["gtthan"],
       ltthan: permitValidations["ltthan"],
       equalto: permitValidations["equalto"],
+      colschema: permitValidations["colschema"],
     },
     allowedProps: { childs: false },
   },
@@ -216,24 +217,6 @@ function validateIndividualNode(nodeObj, currObj) {
     } else {
       return rtnError(
         `Property ${name} has invalid child type. Childs should be an array of objects.`
-      );
-    }
-  }
-
-  if (arrSchema) {
-    if (
-      !typeStatus["typeAllowedProps"] ||
-      !typeStatus["typeAllowedProps"]["arrSchema"]
-    ) {
-      return rtnError(`arrSchema props is not permited for ${type} type.`);
-    }
-    if (typeof arrSchema == "object") {
-      if (childs.length > 0) {
-        return validateArrSchema(childs, currObj[name]);
-      }
-    } else {
-      return rtnError(
-        `Property ${name} has invalid arrSchema type. arrSchema should be an Object`
       );
     }
   }

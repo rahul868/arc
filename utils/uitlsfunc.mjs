@@ -17,13 +17,16 @@
 
 */
 
-import {} from "../arc.mjs";
+import { arc } from "../arc.mjs";
 
-function checkFirstSchema(nodeData, schemaData) {
+function collectionSchema(nodeData, schemaProps) {
   /*
     Basic validation for type checking and input parameter checking.
     nodeData : It should be array , and It should have 1 st index to run this validator.
-    schemaData : Expected schema to validate against received Data.
+    schemaData : Expected schema to validate against received Data. Also it receives more parameters 
+    such as start and end point of arr index.
+
+    const {start=0, end=1 , schema} = schemaProps;
 
   */
 
@@ -31,17 +34,47 @@ function checkFirstSchema(nodeData, schemaData) {
     // We have not received expected array
     return {
       success: false,
-      msg: `checkFirstSchema checking is declined because Provided array is not valid.`,
+      msg: `collectionSchema checking is declined because Provided array is not valid.`,
     };
   }
 
-  if (!schemaData) {
+  if (
+    !schemaProps ||
+    typeof schemaProps != "object" ||
+    Array.isArray(schemaProps)
+  ) {
     // We have not received expected array
     return {
       success: false,
-      msg: `checkFirstSchema checking is declined because expected schema is not available.`,
+      msg: `collectionSchema checking is declined because expected schema is not available.`,
     };
   }
+
+  const { start = 0, end = 1, schema } = schemaProps;
+
+  if (!schema || typeof schema != "object" || Array.isArray(schema)) {
+    return {
+      success: false,
+      msg: `collectionSchema checking is declined because Valid schema received.`,
+    };
+  }
+
+  const validatorRec = arc();
+  for (let i = 0; i < nodeData.length; i++) {
+    let arrRecStatus = validatorRec.arcInit({
+      root: schema,
+      data: nodeData[i],
+    });
+
+    if (!arrRecStatus.success) {
+      return arrRecStatus;
+    }
+    console.log(i, "->", arrRecStatus);
+  }
+  return {
+    success: true,
+    msg: `Validates!`,
+  };
 }
 
 function shouldBe(nodeData, valueArr) {
@@ -164,6 +197,6 @@ const permitValidations = {
   gtthan: { allowed: true, callback: gt },
   ltthan: { allowed: true, callback: lt },
   equalto: { allowed: true, callback: equal },
-  firstsch: { allowed: true, callback: equal },
+  colschema: { allowed: true, callback: collectionSchema },
 };
 export { permitValidations };

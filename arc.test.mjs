@@ -128,11 +128,7 @@ let received = {
       },
     },
   },
-  contacts: [
-    { type: "email", value: "john@example.com" },
-    { type: "phone", value: "555-123-4567" },
-    { type: "phone", value: "555-123-4567" },
-  ],
+  contacts: [{ craft: { phone: "232323", email: "john@example.com" } }],
 };
 
 // Expected schema to check in above data.
@@ -188,7 +184,23 @@ let expected = {
     {
       type: "arr",
       name: "contacts",
-      validations: [{ name: "equalto", data: 3 }],
+      validations: [
+        {
+          name: "colschema",
+          data: {
+            start: 0,
+            end: 2,
+            schema: {
+              type: "obj",
+              name: "craft",
+              childs: [
+                { type: "str", name: "phone" },
+                { type: "str", name: "email" },
+              ],
+            },
+          },
+        },
+      ],
     },
   ],
 };
